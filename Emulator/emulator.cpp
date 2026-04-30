@@ -28,8 +28,11 @@
 #ifdef EMULATE
 #define SSD1306_WHITE COLOR_WHITE
 #define SSD1306_BLACK COLOR_BLACK
+#define NBDIR "./digital_notebook/"
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT);
+SDStub SD;
 #else
+#define NBDIR "/digital_notebook/"
 #define SD_SCK D8
 #define SD_MISO D9
 #define SD_MOSI D10
@@ -40,10 +43,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 SPIClass sdSPI(FSPI);
 #endif
 
-// note: cursorpos is for the buffer location
-const int PAGE_SIZE = 10;
 const int COL_NUM = 21;
-const int ROW_NUM = 8 * PAGE_SIZE;
+const int ROW_NUM = 8;
 
 char buffer[ROW_NUM][COL_NUM];
 
@@ -55,11 +56,6 @@ uint8_t bufferCol = 0;
 
 uint8_t cursorRow = 0;
 uint8_t cursorCol = 0;
-
-int CURSOR_INTERVAL = 450;
-long lastBlinkMs = 0;
-bool cursorReady = false;
-bool cursorOn = false;
 
 long lastKeyPress = millis();
 long keyPressCount = 0;
@@ -92,7 +88,6 @@ void printBuffer() {
 
   display.setCursor(cursorRow, cursorCol);
   display.display();
-  cursorReady = true;
 }
 
 void printToScreen(const char *s) {
@@ -109,11 +104,39 @@ void printToScreen(const char *s) {
   display.setCursor(0,0);
 }
 
+std::string initialize() {
+  if (!SD._exists(NBDIR)) {
+    // initialize digital notebook files
+    SD._mkdir(NBDIR);
+    File settings = SD._open(NBDIR ".nbsettings", FILE_WRITE);
+    settings._write((const uint8_t*) "1", 1);
+    settings._close();
+    return "1.txt";
+  }
+  char line[32];
+  File settings = SD._open(NBDIR ".nbsettings", FILE_WRITE);
+  settings._seek(0);
+  settings._read((uint8_t*) line, 32);
+  int num = atoi(line) + 1;
+  snprintf(line, 32, "%d", num);
+  settings._seek(0);
+  settings._write((const uint8_t*) line, strlen(line));
+
+  char filename[256];
+  snprintf(filename, 256, NBDIR "%d.txt", num);
+  return filename;
+}
 
 void updateFile() {
 }
 
-void handleKeypress(uint8_t ascii) {
+void saveFile() {
+}
+
+void openFile() {
+}
+
+void handleKeypress(uint8_t ascii, uint8_t keycode) {
   if (' ' <= ascii && ascii <= '~') {
     buffer[bufferRow][bufferCol] = ascii;
     bufferCol++;
@@ -123,7 +146,7 @@ void handleKeypress(uint8_t ascii) {
     bufferCol = 0;
     bufferRow++;
   } 
-  else if (ascii == 8 || ascii == KEY_BACKSPACE || ascii == 7 /* backspace */) {
+  else if (ascii == 8 /* backspace */) {
     if (bufferRow == 0 && bufferCol == 0) {
       return;
     }
@@ -146,18 +169,18 @@ void handleKeypress(uint8_t ascii) {
   else if (ascii == 27 /* escape */) { // show menu
     editmode = 0;
   }
-  else if (ascii == KEY_DOWN) { 
+  else if (keycode == KEY_DOWN) { 
 
   }
-  else if (ascii == KEY_UP) { 
-
-  }
-
-  else if (ascii == KEY_LEFT) { 
+  else if (keycode == KEY_UP) { 
 
   }
 
-  else if (ascii == KEY_UP) { 
+  else if (keycode == KEY_LEFT) { 
+
+  }
+
+  else if (keycode == KEY_UP) { 
 
   }
 
@@ -181,13 +204,9 @@ void handleKeypress(uint8_t ascii) {
   lastKeyPress = millis();
 }
 
-std::string openNextFile() {
-  return "1.txt";
-}
-
 class MyEspUsbHost : public EspUsbHost {
   void onKeyboardKey(uint8_t ascii, uint8_t keycode, uint8_t modifier) {
-    handleKeypress(ascii);
+    handleKeypress(ascii, keycode);
   };
 };
 
@@ -220,7 +239,7 @@ void setup() {
 #endif
 
   memset(buffer, ' ', COL_NUM * ROW_NUM);
-  DIARY_FILE_NAME = openNextFile();
+  DIARY_FILE_NAME = initialize();
 
   delay(200);
   std::string message = "Digital Notebook\n\nSaving to ";
@@ -229,16 +248,14 @@ void setup() {
 }
 
 void loop() {
-  while (1) {
-    if (keyPressCount == 0) { // clear on first key press
-      memset(buffer, ' ', ROW_NUM * COL_NUM);
-    }
+  if (keyPressCount == 0) { // clear on first key press
+    memset(buffer, ' ', ROW_NUM * COL_NUM);
+  }
 
-    usbHost.task();
-    if (((millis()-lastKeyPress) > 3000) && (keyPressCount != lastKeyPressCount)){
-      updateFile(); // save to secret backup file?
-      lastKeyPressCount = keyPressCount;
-    }
+  usbHost.task();
+  if (((millis()-lastKeyPress) > 3000) && (keyPressCount != lastKeyPressCount)){
+    updateFile(); // save to secret backup file? Put in different thread
+    lastKeyPressCount = keyPressCount;
   }
 }
 
@@ -249,7 +266,9 @@ int main() {
   cbreak();
 
   setup();
-  loop();
+  while (1) {
+    loop();
+  }
 
   endwin();
   return 0;

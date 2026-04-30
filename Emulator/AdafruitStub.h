@@ -18,9 +18,7 @@ void delay(int ms) {
 class Serial {
 public:
   static void begin(int v) {}
-  static void printf(const char* s, va_list args) {
-    printf(s, args);
-  }
+  static void printf(const char* s, va_list args) { }
 };
 
 class Adafruit_SSD1306 {

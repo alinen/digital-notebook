@@ -11,8 +11,9 @@ public:
         case KEY_RIGHT: keycode = 0x4; break; 
         case KEY_UP: keycode = 0x5; break; 
         case KEY_DOWN: keycode = 0x5; break; 
-        case KEY_BACKSPACE: keycode = 0xBB; break;
-        case KEY_ENTER: keycode = 0x28; break;
+        case KEY_BACKSPACE: keycode = 8; break;
+        case KEY_ENTER: ncode = 13; keycode = 13; break;
+        case 10: ncode = 13; keycode = 13; break;
         case 27: keycode = 0x29; break;
     }
     onKeyboardKey((uint8_t) ncode, keycode, 0);
