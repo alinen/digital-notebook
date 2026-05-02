@@ -26,8 +26,8 @@
 #define SCREEN_HEIGHT 64  // OLED display height, in pixels
 
 #ifdef EMULATE
-#define SSD1306_WHITE COLOR_WHITE
-#define SSD1306_BLACK COLOR_BLACK
+#define SSD1306_WHITE 1
+#define SSD1306_BLACK 2
 #define NBDIR "./digital_notebook/"
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT);
 SDStub SD;
@@ -45,10 +45,21 @@ SPIClass sdSPI(FSPI);
 
 const int COL_NUM = 21;
 const int ROW_NUM = 8;
-
 char buffer[ROW_NUM][COL_NUM];
+char options[ROW_NUM][COL_NUM];
+char menu[ROW_NUM][COL_NUM+1] = { // +1 is for trailing `\0'
+  "                     ",
+  "     __________      ",
+  "    |  NEW     |     ",
+  "    |  SAVE    |     ",
+  "    |  OPEN    |     ",
+  "    |__________|     ",
+  "                     ",
+  "                     "
+};
 
-bool editmode = 1;
+bool showmenu = 0;
+int menuSelected = 0;
 std::string DIARY_FILE_NAME;
 
 uint8_t bufferRow = 0;
@@ -65,18 +76,11 @@ void printBuffer() {
   display.clearDisplay();
   display.setTextSize(1);               // Normal 1:1 pixel scale
   display.setTextColor(SSD1306_WHITE);  // Draw white text
-
-  int startCol = 0;
-  int startRow;
-  if (bufferRow <= 7) {
-    startRow = 0;
-  } else {
-    startRow = bufferRow - 7;
-  }
+  display.setCursor(0,0);
 
   int sr = 0;
   int sc = 0;
-  for (int row = startRow; (row < startRow + 8) && (row < ROW_NUM); row++) {
+  for (int row = 0; row < ROW_NUM; row++) {
     for (int col = 0; col < COL_NUM; col++) {
       display.drawChar(sr, sc++, buffer[row][col]);
       if (sc >= COL_NUM) {
@@ -87,6 +91,32 @@ void printBuffer() {
   }
 
   display.setCursor(cursorRow, cursorCol);
+  display.display();
+}
+
+void printMenu() {
+  display.clearDisplay();
+  display.setTextSize(1);               // Normal 1:1 pixel scale
+  display.setCursor(0,0);
+
+  int sr = 0;
+  int sc = 0;
+  for (int row = 0; row < ROW_NUM; row++) {
+    if (menuSelected+3 == row) {
+      display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);  // Draw black text
+    }
+    else {
+      display.setTextColor(SSD1306_WHITE);  // Draw white text
+    }
+    for (int col = 0; col < COL_NUM; col++) {
+      display.drawChar(sr, sc++, menu[row][col]);
+      if (sc >= COL_NUM) {
+        sr++;
+        sc = 0;
+      }
+    }
+  }
+
   display.display();
 }
 
@@ -136,70 +166,69 @@ void saveFile() {
 void openFile() {
 }
 
-void handleKeypress(uint8_t ascii, uint8_t keycode) {
-  if (' ' <= ascii && ascii <= '~') {
-    buffer[bufferRow][bufferCol] = ascii;
-    bufferCol++;
+void backspaceChar() {
+  buffer[bufferRow][--bufferCol] = ' ';
+  if (bufferCol < 0) {
+    bufferRow = bufferRow > 0? bufferRow-1 : 0;
+    bufferCol = COL_NUM-1;
   } 
-  else if (ascii == 13 /* newline */) {
-    buffer[bufferRow][bufferCol] = ascii;
+  cursorRow = bufferRow;
+  cursorCol = bufferCol;
+  printBuffer();
+}
+
+void newlineChar() {
+  buffer[bufferRow][bufferCol] = '\n';
+  bufferCol = cursorCol = 0;
+  bufferRow++;
+  cursorRow = bufferRow;
+  printBuffer();
+}
+
+void writeChar(uint8_t ascii) {
+  buffer[bufferRow][bufferCol] = ascii;
+  bufferCol++;
+  if (bufferCol >= COL_NUM) {
     bufferCol = 0;
     bufferRow++;
-  } 
-  else if (ascii == 8 /* backspace */) {
-    if (bufferRow == 0 && bufferCol == 0) {
-      return;
-    }
-
-    if (bufferCol == 0) {
-      bufferRow--;
-      bufferCol = COL_NUM - 1;
-      while (bufferCol > 0) {
-        if (buffer[bufferRow][bufferCol] != '\0') {
-          break;
-        }
-        bufferCol--;
-      }
-    } else {
-      bufferCol--;
-    }
-
-    buffer[bufferRow][bufferCol] = ' ';
   }
-  else if (ascii == 27 /* escape */) { // show menu
-    editmode = 0;
+  cursorCol = bufferCol;
+  cursorRow = bufferRow;
+  printBuffer();
+}
+
+void showMenu() {
+  if (showmenu) {
+    printBuffer(); 
+    showmenu = false;
   }
+  else {
+    printMenu();
+    showmenu = true;
+  }
+}
+
+void handleKeypress(uint8_t ascii, uint8_t keycode) {
+  if (' ' <= ascii && ascii <= '~') writeChar(ascii);
+  else if (ascii == 13 /* newline */) newlineChar();
+  else if (ascii == 8 /* backspace */) backspaceChar();
+  else if (ascii == 27 /* escape */)  showMenu();
   else if (keycode == KEY_DOWN) { 
-
+    menuSelected = (menuSelected + 1) % 3;
   }
   else if (keycode == KEY_UP) { 
-
+    menuSelected = (menuSelected - 1) % 3;
   }
-
   else if (keycode == KEY_LEFT) { 
 
   }
-
   else if (keycode == KEY_UP) { 
 
   }
 
   lastKeyPress = millis();
   keyPressCount++;
-
-  if (bufferCol >= COL_NUM) {
-    bufferCol = 0;
-    bufferRow++;
-  }
-  
-  // Handle case where buffer is full
-  if (bufferRow >= ROW_NUM) {
-    bufferRow = 0;
-  }
-  cursorRow = bufferRow > 7? 7 : bufferRow;
-  cursorCol = bufferCol;
-
-  printBuffer();
+  // TODO: Handle case where buffer is full
 
   lastKeyPress = millis();
 }
@@ -236,6 +265,8 @@ void setup() {
 
   usbHost.begin();
   usbHost.setHIDLocal(HID_LOCAL_US);
+#else
+  display.begin(0,0);
 #endif
 
   memset(buffer, ' ', COL_NUM * ROW_NUM);
@@ -263,6 +294,7 @@ int main() {
   initscr();
   keypad(stdscr, TRUE);
   noecho();
+  start_color();
   cbreak();
 
   setup();

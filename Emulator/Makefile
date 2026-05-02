@@ -1,12 +1,14 @@
 CC=g++
-SOURCES=emulator.cpp 
-FILES := $(subst .cpp,,$(SOURCES))
+FILES := emulator testFileview
 FLAGS=-g -Wall -Wvla -Werror -Wno-unused-variable -Wno-unused-but-set-variable -DEMULATE
 LIBS=-lcurses
 
 all: $(FILES)
 
 emulator :: emulator.cpp EspUsbHostStub.h AdafruitStub.h SDStub.h
+	$(CC) $(FLAGS) $< -o $@ -lcurses
+
+testFileview :: testFileview.cpp fileview.h 
 	$(CC) $(FLAGS) $< -o $@ -lcurses
 
 % :: %.cpp

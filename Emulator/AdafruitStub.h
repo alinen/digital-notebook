@@ -26,6 +26,7 @@ public:
   Adafruit_SSD1306(int w, int h) {
     width = w;
     height = h;
+    lastfg = 1;
   }
 
   ~Adafruit_SSD1306() {
@@ -33,6 +34,9 @@ public:
   }
 
   bool begin(int a, int b) {
+    init_pair(1, COLOR_WHITE, COLOR_BLACK);
+    init_pair(2, COLOR_BLACK, COLOR_WHITE);
+    attron(COLOR_PAIR(1));
     return true;
   }
 
@@ -41,8 +45,22 @@ public:
   }
 
   void setTextSize(int s) {}
-  void setTextColor(int fg) {}
-  void setTextColor(int fg, int bg) {}
+  void setTextColor(short fg) {
+    if (fg != lastfg) {
+      attroff(COLOR_PAIR(lastfg));
+      attron(COLOR_PAIR(fg));
+      lastfg = fg;
+    }
+  }
+
+  void setTextColor(short fg, short bg) {
+    if (fg != lastfg) {
+      attroff(COLOR_PAIR(lastfg));
+      attron(COLOR_PAIR(fg));
+      lastfg = fg;
+    }
+  }
+
   void setCursor(int y, int x) {
     move(y, x);
   }
@@ -62,6 +80,7 @@ public:
 private:
   int width;
   int height;
+  short lastfg;
 };
 
 #endif
