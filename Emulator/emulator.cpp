@@ -21,6 +21,7 @@
 #include <Adafruit_SSD1306.h>
 #endif
 #include <string>
+#include "fileview.h"
 
 #define SCREEN_WIDTH 128  // OLED display width, in pixels
 #define SCREEN_HEIGHT 64  // OLED display height, in pixels
@@ -46,7 +47,6 @@ SPIClass sdSPI(FSPI);
 const int COL_NUM = 21;
 const int ROW_NUM = 8;
 char buffer[ROW_NUM][COL_NUM];
-char options[ROW_NUM][COL_NUM];
 char menu[ROW_NUM][COL_NUM+1] = { // +1 is for trailing `\0'
   "                     ",
   "     __________      ",
@@ -62,15 +62,11 @@ bool showmenu = 0;
 int menuSelected = 0;
 std::string DIARY_FILE_NAME;
 
-uint8_t bufferRow = 0;
-uint8_t bufferCol = 0;
-
-uint8_t cursorRow = 0;
-uint8_t cursorCol = 0;
-
 long lastKeyPress = millis();
 long keyPressCount = 0;
 long lastKeyPressCount = 0;
+
+dnb::Fileview fv;
 
 void printBuffer() {
   display.clearDisplay();
@@ -78,19 +74,18 @@ void printBuffer() {
   display.setTextColor(SSD1306_WHITE);  // Draw white text
   display.setCursor(0,0);
 
-  int sr = 0;
-  int sc = 0;
-  for (int row = 0; row < ROW_NUM; row++) {
-    for (int col = 0; col < COL_NUM; col++) {
-      display.drawChar(sr, sc++, buffer[row][col]);
-      if (sc >= COL_NUM) {
-        sr++;
-        sc = 0;
-      }
+  int i, j;
+  dnb::Fileview::line* row = NULL;
+  dnb::Fileview::line* startRow = fv.getStartRow(ROW_NUM, COL_NUM);
+  for (row = startRow, i = 0; row; row = row->next, i++) {
+    for (j = 0; j < row->len; j++) {
+      display.drawChar(i, j, (uint8_t) row->buf[j]);
     }
   }
-
-  display.setCursor(cursorRow, cursorCol);
+  
+  int r, c;
+  fv.getCursorPos(r, c);
+  display.setCursor(r, c);
   display.display();
 }
 
@@ -123,15 +118,16 @@ void printMenu() {
 void printToScreen(const char *s) {
   int r = 0;
   int c = 0;
-  for (int i = 0; i < (int) strlen(s); i++){
-    buffer[r][c++] = s[i];
+  int n = (int) strlen(s);
+  for (int i = 0; i < n; i++){
+    display.drawChar(r, c++, s[i]);
     if (c >= COL_NUM) {
       r++;
       c = 0;
     }
   }
-  printBuffer();
   display.setCursor(0,0);
+  display.display();
 }
 
 std::string initialize() {
@@ -160,46 +156,9 @@ std::string initialize() {
 void updateFile() {
 }
 
-void saveFile() {
-}
-
-void openFile() {
-}
-
-void backspaceChar() {
-  buffer[bufferRow][--bufferCol] = ' ';
-  if (bufferCol < 0) {
-    bufferRow = bufferRow > 0? bufferRow-1 : 0;
-    bufferCol = COL_NUM-1;
-  } 
-  cursorRow = bufferRow;
-  cursorCol = bufferCol;
-  printBuffer();
-}
-
-void newlineChar() {
-  buffer[bufferRow][bufferCol] = '\n';
-  bufferCol = cursorCol = 0;
-  bufferRow++;
-  cursorRow = bufferRow;
-  printBuffer();
-}
-
-void writeChar(uint8_t ascii) {
-  buffer[bufferRow][bufferCol] = ascii;
-  bufferCol++;
-  if (bufferCol >= COL_NUM) {
-    bufferCol = 0;
-    bufferRow++;
-  }
-  cursorCol = bufferCol;
-  cursorRow = bufferRow;
-  printBuffer();
-}
-
 void showMenu() {
   if (showmenu) {
-    printBuffer(); 
+    printBuffer();
     showmenu = false;
   }
   else {
@@ -208,34 +167,12 @@ void showMenu() {
   }
 }
 
-void handleKeypress(uint8_t ascii, uint8_t keycode) {
-  if (' ' <= ascii && ascii <= '~') writeChar(ascii);
-  else if (ascii == 13 /* newline */) newlineChar();
-  else if (ascii == 8 /* backspace */) backspaceChar();
-  else if (ascii == 27 /* escape */)  showMenu();
-  else if (keycode == KEY_DOWN) { 
-    menuSelected = (menuSelected + 1) % 3;
-  }
-  else if (keycode == KEY_UP) { 
-    menuSelected = (menuSelected - 1) % 3;
-  }
-  else if (keycode == KEY_LEFT) { 
-
-  }
-  else if (keycode == KEY_UP) { 
-
-  }
-
-  lastKeyPress = millis();
-  keyPressCount++;
-  // TODO: Handle case where buffer is full
-
-  lastKeyPress = millis();
-}
-
 class MyEspUsbHost : public EspUsbHost {
   void onKeyboardKey(uint8_t ascii, uint8_t keycode, uint8_t modifier) {
-    handleKeypress(ascii, keycode);
+    fv.processChar(ascii, keycode);
+    printBuffer();
+    lastKeyPress = millis();
+    keyPressCount++;
   };
 };
 

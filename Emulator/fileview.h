@@ -2,6 +2,7 @@
 #define fileview_H_
 
 #include <stdlib.h>
+#include <errno.h>
 #include <stdint.h>
 #include <cassert>
 #include <cstring>
@@ -19,17 +20,13 @@ namespace dnb { // namespace digital notebook
     bool open(const char* filename);
     bool save(const char* filename);
 
-    void render(uint8_t** screen, int width, int height) const;
     int processChar(uint8_t ch, int keycode);
     int numLines() const;
     void getCursorPos(int& row, int& col) const;
 
-    enum Error { ENONE, EFILENOTFOUND, ENOMEM };
     const char* errorstr() const;
-
     friend void fvTests();
 
-  private:
     struct line {
       char* buf;
       int maxlen;
@@ -37,6 +34,9 @@ namespace dnb { // namespace digital notebook
       line* next;
       line* prev;
     };
+    line* getStartRow(int width, int height) const;
+
+  private:
 
     line* newLine();
     void clear(); 
@@ -45,7 +45,7 @@ namespace dnb { // namespace digital notebook
     void deleteChar(line* row, int c);
     line* addLine(line* row); // add new line after row
 
-    Error mError;
+    int mError;
     line* mCursorRow;
     line* mScreenRow;
     int mCursorCol;
@@ -56,7 +56,7 @@ namespace dnb { // namespace digital notebook
   };
 
   Fileview::Fileview() : 
-    mError(ENONE),
+    mError(0),
     mCursorRow(NULL),
     mScreenRow(NULL),
     mCursorCol(0),
@@ -107,14 +107,12 @@ namespace dnb { // namespace digital notebook
     return mNLines;
   }
 
-  void Fileview::render(uint8_t** screen, int width, int height) const {
-    int i, j;
-    Fileview::line* row;
-    for (row = mCursorRow, i = 0; row; row = row->next, i++) {
-      for (j = 0; j < row->len; j++) {
-        screen[i][j] = (uint8_t) row->buf[j];
-      }
-    }
+  Fileview::line* Fileview::getStartRow(int width, int height) const {
+    if (mCursorRowNum < height) return mFirst;
+
+    Fileview::line* start = mCursorRow;
+    for (int i = 0; i < height; i++, start = start->prev);
+    return start;
   }
 
   int Fileview::processChar(uint8_t ch, int keycode) {
@@ -161,7 +159,7 @@ namespace dnb { // namespace digital notebook
         mCursorCol--;
       }
     }
-    else if (ch == '\n') {
+    else if (ch == 13) {
       line* newRow = addLine(mCursorRow);
       //if (mCursorCol < mCursorRow->len - 1) { // newline in middle of line
       //  moveChars(newRow, mCursorRow, mCursorCol);
@@ -174,7 +172,7 @@ namespace dnb { // namespace digital notebook
       insertChar(mCursorRow, mCursorCol, ch);
       mCursorCol++;
     }
-    return ENONE;
+    return 0;
   }
 
   void Fileview::getCursorPos(int& row, int& col) const {
@@ -236,9 +234,8 @@ namespace dnb { // namespace digital notebook
   }
 
   const char* Fileview::errorstr() const {
-    enum Error { ENONE, EFILENOTFOUND, ENOMEM };
     switch (mError) {
-      case EFILENOTFOUND: return "File not found";
+      case ENOENT: return "File not found";
       case ENOMEM: return "Out of memory";
       default: return "";
     } 
@@ -257,7 +254,7 @@ namespace dnb { // namespace digital notebook
 
   void fvTests() {
     int r, c;
-    Fileview fv;
+    dnb::Fileview fv;
     fv.processChar('a', 0); 
     fv.getCursorPos(r, c);
     assert(r == 0 && c == 1);
@@ -272,17 +269,17 @@ namespace dnb { // namespace digital notebook
     assert(fv.mFirst->len == 3);
     assert(fv.mNLines == 1);
 
-    fv.processChar('\n', 0);
+    fv.processChar(13, 13);
     fv.getCursorPos(r, c);
     assert(r == 1 && c == 0);
     assert(strncmp(fv.mFirst->next->buf, "\n", 1) == 0);
     assert(fv.mFirst->next->len == 1);
     assert(fv.mNLines == 2);
 
-    fv.processChar('\n', 0);
+    fv.processChar(13, 13);
     fv.processChar('x', 0);
     fv.processChar('y', 0);
-    fv.processChar('\n', 0);
+    fv.processChar(13, 13);
     fv.processChar('1', 0);
     fv.processChar('2', 0);
     fv.getCursorPos(r, c);
