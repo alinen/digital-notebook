@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstring>
 #include <algorithm>
+#include <string>
 
 #ifdef EMULATE
 #define SSD1306_WHITE 1
@@ -29,9 +30,8 @@ namespace dnb { // namespace digital notebook
     ~Fileview();
 
     int empty();
-    int open();
-    int save();
-
+    int open(const std::string& filename);
+    int save(const std::string& filename);
 
     void render(Adafruit_SSD1306& display, int width, int height);
 
@@ -111,6 +111,14 @@ namespace dnb { // namespace digital notebook
     return 0;
   }
 
+  int Fileview::open(const std::string& filename) {
+    return 0;
+  }
+
+  int Fileview::save(const std::string& filename) {
+    return 0;
+  }
+
   int Fileview::numLines() const {
     return mNLines;
   }
@@ -136,6 +144,13 @@ namespace dnb { // namespace digital notebook
         mCursorRow = mCursorRow->next;
         mCursorRowNum++;
         mCursorCol = std::min(mCursorRow->len-1, mCursorCol);
+      }
+      else { // add new empty line
+        line* newRow = addLine(mCursorRow);
+        if (!newRow) status = -1;
+        mCursorRow = newRow;
+        mCursorRowNum++;
+        mCursorCol = 0;
       }
     }
     else if (keycode == 0x52) {  // up
@@ -195,7 +210,7 @@ namespace dnb { // namespace digital notebook
         status = -1;
       }
     }
-    else {
+    else if (' ' <= ch && ch <= '~') {
       int status = insertChar(mCursorRow, mCursorCol, ch);
       mCursorCol++;
     }
