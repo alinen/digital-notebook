@@ -5,7 +5,7 @@ LIBS=-lcurses
 
 all: $(FILES)
 
-emulator :: emulator.cpp EspUsbHostStub.h AdafruitStub.h SDStub.h Fileview.h
+emulator :: emulator.cpp EspUsbHostStub.h AdafruitStub.h SDStub.h Fileview.h Menu.h
 	$(CC) $(FLAGS) $< -o $@ -lcurses
 
 testFileview :: testFileview.cpp fileview.h 

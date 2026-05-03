@@ -22,6 +22,7 @@
 #endif
 #include <string>
 #include "fileview.h"
+#include "menu.h"
 
 #define SCREEN_WIDTH 128  // OLED display width, in pixels
 #define SCREEN_HEIGHT 64  // OLED display height, in pixels
@@ -46,17 +47,6 @@ SPIClass sdSPI(FSPI);
 
 const int COL_NUM = 21;
 const int ROW_NUM = 8;
-char buffer[ROW_NUM][COL_NUM];
-char menu[ROW_NUM][COL_NUM+1] = { // +1 is for trailing `\0'
-  "                     ",
-  "     __________      ",
-  "    |  NEW     |     ",
-  "    |  SAVE    |     ",
-  "    |__________|     ",
-  "                     ",
-  "                     ",
-  "                     "
-};
 
 bool showmenu = 0;
 int menuSelected = 0;
@@ -67,32 +57,7 @@ long keyPressCount = 0;
 long lastKeyPressCount = 0;
 
 dnb::Fileview fv;
-
-void printMenu() {
-  display.clearDisplay();
-  display.setTextSize(1);               // Normal 1:1 pixel scale
-  display.setCursor(0,0);
-
-  int sr = 0;
-  int sc = 0;
-  for (int row = 0; row < ROW_NUM; row++) {
-    if (menuSelected+3 == row) {
-      display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);  // Draw black text
-    }
-    else {
-      display.setTextColor(SSD1306_WHITE);  // Draw white text
-    }
-    for (int col = 0; col < COL_NUM; col++) {
-      display.drawChar(sr, sc++, menu[row][col]);
-      if (sc >= COL_NUM) {
-        sr++;
-        sc = 0;
-      }
-    }
-  }
-
-  display.display();
-}
+dnb::Menu menu;
 
 void printToScreen(const char *s) {
   int r = 0;
@@ -126,12 +91,6 @@ void newFile() {
   fv.empty();
 }
 
-void openFile() {
-}
-
-void saveFile() {
-}
-
 void initializeNotebookDir() {
   if (!SD._exists(NBDIR)) {
     // initialize digital notebook files
@@ -142,21 +101,26 @@ void initializeNotebookDir() {
   }
 }
 
-void showMenu() {
-  if (showmenu) {
-    fv.render(display, COL_NUM, ROW_NUM);
-    showmenu = false;
-  }
-  else {
-    printMenu();
-    showmenu = true;
-  }
-}
-
 class MyEspUsbHost : public EspUsbHost {
   void onKeyboardKey(uint8_t ascii, uint8_t keycode, uint8_t modifier) {
-    fv.processChar(ascii, keycode);
-    fv.render(display, COL_NUM, ROW_NUM);
+    if (ascii == 27) { // escape
+      showmenu = !showmenu;
+    }
+    else if (ascii == 13 && showmenu) {
+      int option = menu.getOption();
+      if (option == 0) newFile();
+      else if (option == 1) fv.save(DIARY_FILE_NAME);
+      showmenu = false;
+    }
+
+    if (showmenu) {
+      menu.processChar(ascii, keycode);
+      menu.render(display, COL_NUM, ROW_NUM);
+    }
+    else {
+      fv.processChar(ascii, keycode);
+      fv.render(display, COL_NUM, ROW_NUM);
+    }
     lastKeyPress = millis();
     keyPressCount++;
   };
@@ -192,7 +156,6 @@ void setup() {
   display.begin(0,0);
 #endif
 
-  memset(buffer, ' ', COL_NUM * ROW_NUM);
   initializeNotebookDir();
   newFile();
 
@@ -203,13 +166,9 @@ void setup() {
 }
 
 void loop() {
-  if (keyPressCount == 0) { // clear on first key press
-    memset(buffer, ' ', ROW_NUM * COL_NUM);
-  }
-
   usbHost.task();
   if (((millis()-lastKeyPress) > 3000) && (keyPressCount != lastKeyPressCount)){
-    saveFile(); // save to secret backup file? Put in different thread
+    fv.save(DIARY_FILE_NAME); // Put in different thread?
     lastKeyPressCount = keyPressCount;
   }
 }
