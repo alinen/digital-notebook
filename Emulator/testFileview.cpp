@@ -1,4 +1,8 @@
 #include "fileview.h"
+#ifdef EMULATE
+#include "SDStub.h"
+SDStub SD;
+#endif
 using namespace dnb;
 
 namespace dnb {
@@ -53,11 +57,15 @@ namespace dnb {
 
     fv.processChar(0, 0x50); // move left
     fv.processChar(8, 8);
-    fv.getCursorPos(r, c);
+    fv.getCursorPos(r, c); // contents: ab\n\nxy\n2\n
     assert(r == 3 && c == 0);
     assert(strncmp(fv.mCursorRow->buf, "2\n", 2) == 0);
     assert(fv.mCursorRow->len == 2);
     assert(fv.mNLines == 4);
+
+    File f = SD._open("temp.txt", FILE_WRITE);
+    fv.save(f);
+    f._close();
 
     fv.empty();
     fv.getCursorPos(r, c);
@@ -87,6 +95,28 @@ namespace dnb {
     assert(strncmp(fv.mCursorRow->buf, "test\n", 5) == 0);
     assert(fv.mCursorRow->len == 5);
     assert(fv.mNLines == 1);
+
+    // Test long lines
+    fv.empty();
+    for (int i = 0; i < 100; i++) {
+      fv.processChar('z', 0);
+    }
+    fv.getCursorPos(r, c);
+    assert (r == 0 && c == 100);
+    assert(fv.mCursorRow->len == 101);
+    assert(fv.mNLines == 1);
+
+    File emily = SD._open("emilyd.txt", FILE_READ);
+    emily._seek(0);
+    fv.open(emily);
+    emily._close();
+
+    int i = 0;
+    for (Fileview::line* row = fv.mFirst; row && i < 10; row = row->next, i++) {
+      for (int col = 0; col < row->len; col++) {
+        printf("%c", row->buf[col]);
+      }
+    }
   }
 };
 

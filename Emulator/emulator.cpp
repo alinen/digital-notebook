@@ -91,6 +91,13 @@ void newFile() {
   fv.empty();
 }
 
+void saveFile() {
+  File savefile = SD._open(DIARY_FILE_NAME.c_str(), FILE_WRITE);
+  savefile._seek(0);
+  fv.save(savefile);
+  savefile._close();
+}
+
 void initializeNotebookDir() {
   if (!SD._exists(NBDIR)) {
     // initialize digital notebook files
@@ -109,7 +116,7 @@ class MyEspUsbHost : public EspUsbHost {
     else if (ascii == 13 && showmenu) {
       int option = menu.getOption();
       if (option == 0) newFile();
-      else if (option == 1) fv.save(DIARY_FILE_NAME);
+      else if (option == 1) saveFile();
       showmenu = false;
     }
 
@@ -168,7 +175,7 @@ void setup() {
 void loop() {
   usbHost.task();
   if (((millis()-lastKeyPress) > 3000) && (keyPressCount != lastKeyPressCount)){
-    fv.save(DIARY_FILE_NAME); // Put in different thread?
+    saveFile(); // Put in different thread?
     lastKeyPressCount = keyPressCount;
   }
 }

@@ -16,6 +16,7 @@ class File {
       if (fd != -1) {
         int end = lseek(mfd, 0L, SEEK_END);
         msize = mfd - fd;
+        mavailable = true;
       }
     }
     
@@ -26,9 +27,19 @@ class File {
     void _write(const uint8_t* str, size_t len) {
       write(mfd, str, sizeof(uint8_t)*len);
     }
-
+    
     void _read(uint8_t* buf, size_t len) {
-      read(mfd, buf, sizeof(uint8_t)*len);
+      mavailable = read(mfd, buf, sizeof(uint8_t)*len);
+    }
+
+    uint8_t _read() {
+      uint8_t c;
+      mavailable = read(mfd, &c, sizeof(uint8_t));
+      return c;
+    }
+  
+    bool _available() {
+      return mavailable != 0;
     }
   
     void _seek(size_t offset) {
@@ -49,8 +60,9 @@ class File {
       msize = 0;
     }
   private:
-  int mfd;
-  unsigned int msize;
+    int mfd;
+    unsigned int msize;
+    bool mavailable;
 };
 
 class SDStub {

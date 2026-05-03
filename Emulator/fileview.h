@@ -30,8 +30,8 @@ namespace dnb { // namespace digital notebook
     ~Fileview();
 
     int empty();
-    int open(const std::string& filename);
-    int save(const std::string& filename);
+    int open(File& file);
+    int save(File& file);
 
     void render(Adafruit_SSD1306& display, int width, int height);
 
@@ -111,11 +111,24 @@ namespace dnb { // namespace digital notebook
     return 0;
   }
 
-  int Fileview::open(const std::string& filename) {
-    return 0;
+  int Fileview::open(File& file) {
+    empty();
+    int status = 0;
+    while (file._available() && status == 0) {
+      uint8_t byte = file._read();
+      uint8_t keycode = 0;
+      if (byte == '\n' || byte == '\r') keycode = 13;
+      status = processChar(byte, keycode);
+    }
+    return status;
   }
 
-  int Fileview::save(const std::string& filename) {
+  int Fileview::save(File& file) {
+    for (Fileview::line* row = mFirst; row; row = row->next) {
+      for (int col = 0; col < row->len; col++) {
+        file._write(row->buf[col]);
+      }
+    }
     return 0;
   }
 

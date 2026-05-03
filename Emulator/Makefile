@@ -8,7 +8,7 @@ all: $(FILES)
 emulator :: emulator.cpp EspUsbHostStub.h AdafruitStub.h SDStub.h Fileview.h Menu.h
 	$(CC) $(FLAGS) $< -o $@ -lcurses
 
-testFileview :: testFileview.cpp fileview.h 
+testFileview :: testFileview.cpp fileview.h SDStub.h
 	$(CC) $(FLAGS) $< -o $@ -lcurses
 
 % :: %.cpp
