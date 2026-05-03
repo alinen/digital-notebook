@@ -119,14 +119,14 @@ namespace dnb { // namespace digital notebook
     if (mCursorRowNum < height) return mFirst;
 
     Fileview::line* start = mCursorRow;
-    for (int i = 0; i < height; i++, start = start->prev);
+    for (int i = 0; i < height-1; i++, start = start->prev);
     return start;
   }
 
   int Fileview::processChar(uint8_t ch, int keycode) {
     int status = 0;
     if (keycode == 0x4F) { // right
-      mCursorCol = std::min(mCursorRow->maxlen, mCursorCol+1);
+      mCursorCol = std::min(mCursorRow->len-1, mCursorCol+1);
     }
     else if (keycode == 0x50) { // left 
       mCursorCol = std::max(0, mCursorCol-1);
@@ -154,7 +154,7 @@ namespace dnb { // namespace digital notebook
           if (mCursorRow->len > 1) { // non-empty line
             int newSize = prevLine->len + mCursorRow->len - 1; 
             if (newSize > prevLine->maxlen) {
-              int status = expandLine(prevLine);
+              status = expandLine(prevLine);
               if (status < 0) return -1;
             }
             strncpy(&(prevLine->buf[prevLine->len -1]), mCursorRow->buf, mCursorRow->len);
@@ -199,7 +199,7 @@ namespace dnb { // namespace digital notebook
       int status = insertChar(mCursorRow, mCursorCol, ch);
       mCursorCol++;
     }
-    return 0;
+    return status;
   }
 
   void Fileview::getCursorPos(int& row, int& col) const {
@@ -302,18 +302,23 @@ namespace dnb { // namespace digital notebook
     display.setTextColor(SSD1306_WHITE);  // Draw white text
     display.setCursor(0,0);
 
-    int i, j;
+    int i, j, cr, cc;
     Fileview::line* row = NULL;
-    Fileview::line* startRow = getStartRow(height, width);
-    for (row = startRow, i = 0; row; row = row->next, i++) {
-      for (j = 0; j < row->len; j++) {
-        display.drawChar(i, j, (uint8_t) row->buf[j]);
+    Fileview::line* startRow = getStartRow(width, height);
+    int startCol = mCursorCol >= width-1? mCursorCol - width + 1: 0;
+
+    for (row = startRow, i = 0; row && i < height; row = row->next, i++) {
+      if (row == mCursorRow) cr = i;
+      for (j = 0; j < width; j++) {
+        int idx = j + startCol;
+        if (idx < row->len-1) {
+          display.drawChar(i, j, (uint8_t) row->buf[idx]);
+        }
+        if (idx == mCursorCol) cc = j;
       }
     }
     
-    int r, c;
-    getCursorPos(r, c);
-    display.setCursor(r, c);
+    display.setCursor(cr, cc);
     display.display();
   }
 

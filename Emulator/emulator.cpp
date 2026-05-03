@@ -52,8 +52,8 @@ char menu[ROW_NUM][COL_NUM+1] = { // +1 is for trailing `\0'
   "     __________      ",
   "    |  NEW     |     ",
   "    |  SAVE    |     ",
-  "    |  OPEN    |     ",
   "    |__________|     ",
+  "                     ",
   "                     ",
   "                     "
 };
@@ -67,27 +67,6 @@ long keyPressCount = 0;
 long lastKeyPressCount = 0;
 
 dnb::Fileview fv;
-
-void printBuffer() {
-  display.clearDisplay();
-  display.setTextSize(1);               // Normal 1:1 pixel scale
-  display.setTextColor(SSD1306_WHITE);  // Draw white text
-  display.setCursor(0,0);
-
-  int i, j;
-  dnb::Fileview::line* row = NULL;
-  dnb::Fileview::line* startRow = fv.getStartRow(ROW_NUM, COL_NUM);
-  for (row = startRow, i = 0; row; row = row->next, i++) {
-    for (j = 0; j < row->len; j++) {
-      display.drawChar(i, j, (uint8_t) row->buf[j]);
-    }
-  }
-  
-  int r, c;
-  fv.getCursorPos(r, c);
-  display.setCursor(r, c);
-  display.display();
-}
 
 void printMenu() {
   display.clearDisplay();
@@ -130,15 +109,7 @@ void printToScreen(const char *s) {
   display.display();
 }
 
-std::string initialize() {
-  if (!SD._exists(NBDIR)) {
-    // initialize digital notebook files
-    SD._mkdir(NBDIR);
-    File settings = SD._open(NBDIR ".nbsettings", FILE_WRITE);
-    settings._write((const uint8_t*) "1", 1);
-    settings._close();
-    return "1.txt";
-  }
+void newFile() {
   char line[32];
   File settings = SD._open(NBDIR ".nbsettings", FILE_WRITE);
   settings._seek(0);
@@ -150,15 +121,30 @@ std::string initialize() {
 
   char filename[256];
   snprintf(filename, 256, NBDIR "%d.txt", num);
-  return filename;
+  DIARY_FILE_NAME = filename;
+
+  fv.empty();
 }
 
-void updateFile() {
+void openFile() {
+}
+
+void saveFile() {
+}
+
+void initializeNotebookDir() {
+  if (!SD._exists(NBDIR)) {
+    // initialize digital notebook files
+    SD._mkdir(NBDIR);
+    File settings = SD._open(NBDIR ".nbsettings", FILE_WRITE);
+    settings._write((const uint8_t*) "0", 1);
+    settings._close();
+  }
 }
 
 void showMenu() {
   if (showmenu) {
-    printBuffer();
+    fv.render(display, COL_NUM, ROW_NUM);
     showmenu = false;
   }
   else {
@@ -170,7 +156,7 @@ void showMenu() {
 class MyEspUsbHost : public EspUsbHost {
   void onKeyboardKey(uint8_t ascii, uint8_t keycode, uint8_t modifier) {
     fv.processChar(ascii, keycode);
-    printBuffer();
+    fv.render(display, COL_NUM, ROW_NUM);
     lastKeyPress = millis();
     keyPressCount++;
   };
@@ -207,7 +193,8 @@ void setup() {
 #endif
 
   memset(buffer, ' ', COL_NUM * ROW_NUM);
-  DIARY_FILE_NAME = initialize();
+  initializeNotebookDir();
+  newFile();
 
   delay(200);
   std::string message = "Digital Notebook\n\nSaving to ";
@@ -222,7 +209,7 @@ void loop() {
 
   usbHost.task();
   if (((millis()-lastKeyPress) > 3000) && (keyPressCount != lastKeyPressCount)){
-    updateFile(); // save to secret backup file? Put in different thread
+    saveFile(); // save to secret backup file? Put in different thread
     lastKeyPressCount = keyPressCount;
   }
 }
