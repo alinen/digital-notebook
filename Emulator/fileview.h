@@ -8,6 +8,18 @@
 #include <cstring>
 #include <algorithm>
 
+#ifdef EMULATE
+#define SSD1306_WHITE 1
+#define SSD1306_BLACK 2
+#include "AdafruitStub.h"
+#include "SDStub.h"
+#else
+#include <SD.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#endif
+
 namespace dnb { // namespace digital notebook
 
   const int LINEINC = 32;
@@ -16,9 +28,12 @@ namespace dnb { // namespace digital notebook
     Fileview();
     ~Fileview();
 
-    bool empty();
-    bool open(const char* filename);
-    bool save(const char* filename);
+    int empty();
+    int open();
+    int save();
+
+
+    void render(Adafruit_SSD1306& display, int width, int height);
 
     int processChar(uint8_t ch, int keycode);
     int numLines() const;
@@ -40,10 +55,11 @@ namespace dnb { // namespace digital notebook
 
     line* newLine();
     void clear(); 
-    void insertChar(line* row, int c, char ch); // add ch after c
+    int insertChar(line* row, int c, char ch); // add ch after c
     void deleteLine(line* row);
     void deleteChar(line* row, int c);
     line* addLine(line* row); // add new line after row
+    int expandLine(Fileview::line* row); 
 
     int mError;
     line* mCursorRow;
@@ -82,7 +98,7 @@ namespace dnb { // namespace digital notebook
     }
   }
 
-  bool Fileview::empty() {
+  int Fileview::empty() {
     clear();
 
     line* line = newLine();
@@ -92,15 +108,7 @@ namespace dnb { // namespace digital notebook
     mCursorRow = mFirst;
     mCursorCol = 0;
     mCursorRowNum = 0;
-    return true;
-  }
-
-  bool Fileview::open(const char* filename) {
-    return true;
-  }
-
-  bool Fileview::save(const char* filename) {
-    return true;
+    return 0;
   }
 
   int Fileview::numLines() const {
@@ -116,6 +124,7 @@ namespace dnb { // namespace digital notebook
   }
 
   int Fileview::processChar(uint8_t ch, int keycode) {
+    int status = 0;
     if (keycode == 0x4F) { // right
       mCursorCol = std::min(mCursorRow->maxlen, mCursorCol+1);
     }
@@ -140,11 +149,21 @@ namespace dnb { // namespace digital notebook
       if (mCursorCol == 0) { // delete line
         line* prevLine = mCursorRow->prev;
         if (prevLine) {
-          mCursorCol = prevLine->len - 1;
-          ////if (mCursorRow->len > 1) { // backspace on non-empty line
-          ////  appendLine(prevLine, mCursorRow);
-          ////}
-          deleteLine(prevLine->next);
+
+          mCursorCol = prevLine->len - 1; // set me first
+          if (mCursorRow->len > 1) { // non-empty line
+            int newSize = prevLine->len + mCursorRow->len - 1; 
+            if (newSize > prevLine->maxlen) {
+              int status = expandLine(prevLine);
+              if (status < 0) return -1;
+            }
+            strncpy(&(prevLine->buf[prevLine->len -1]), mCursorRow->buf, mCursorRow->len);
+            prevLine->len = newSize;
+          }
+
+          Fileview::line* toDelete = prevLine->next;
+          if (toDelete) prevLine->next = toDelete->next;
+          deleteLine(toDelete);
           mCursorRow = prevLine;
           mCursorRowNum--;
         }
@@ -161,15 +180,23 @@ namespace dnb { // namespace digital notebook
     }
     else if (ch == 13) {
       line* newRow = addLine(mCursorRow);
-      //if (mCursorCol < mCursorRow->len - 1) { // newline in middle of line
-      //  moveChars(newRow, mCursorRow, mCursorCol);
-      //}
-      mCursorRow = newRow;
-      mCursorRowNum++;
-      mCursorCol = 0;
+      if (newRow) {
+        if (mCursorCol < mCursorRow->len - 1) { // non-empty line
+          newRow->len = mCursorRow->len - mCursorCol;
+          strncpy(newRow->buf, &(mCursorRow->buf[mCursorCol]), newRow->len);
+          mCursorRow->buf[mCursorCol] = '\n';
+          mCursorRow->len = mCursorCol + 1;
+        }
+        mCursorRow = newRow;
+        mCursorRowNum++;
+        mCursorCol = 0;
+      }
+      else {
+        status = -1;
+      }
     }
     else {
-      insertChar(mCursorRow, mCursorCol, ch);
+      int status = insertChar(mCursorRow, mCursorCol, ch);
       mCursorCol++;
     }
     return 0;
@@ -180,20 +207,29 @@ namespace dnb { // namespace digital notebook
     col = mCursorCol;
   }
 
-  void Fileview::insertChar(Fileview::line* row, int c, char ch) {
-    if (row->len >= row->maxlen) { // allocate more space
-      char* newBuf = new char[row->maxlen + LINEINC]; // TODO: Error codes
-      strncpy(newBuf, row->buf, row->maxlen);
-      delete[] row->buf;
-      row->buf = newBuf;
-      row->maxlen = row->maxlen + LINEINC;
+  int Fileview::expandLine(Fileview::line* row) {
+    char* newBuf = new char[row->maxlen + LINEINC]; // TODO: Error codes
+    if (!newBuf) {
+      mError = ENOMEM;
+      return -1;
     }
-    // shift right
-    for (int i = row->len; i > c; i--){
+    strncpy(newBuf, row->buf, row->maxlen);
+    delete[] row->buf;
+    row->buf = newBuf;
+    row->maxlen = row->maxlen + LINEINC;
+    return 0;
+  }
+
+  int Fileview::insertChar(Fileview::line* row, int c, char ch) {
+    if (row->len >= row->maxlen) { // allocate more space
+      if (expandLine(row) < 0) return -1;
+    }
+    for (int i = row->len; i > c; i--){ // shift right
       row->buf[i] = row->buf[i-1];
     }
     row->buf[c] = ch;
     row->len++;
+    return 0;
   }
 
   void Fileview::deleteLine(Fileview::line* row) {
@@ -224,6 +260,10 @@ namespace dnb { // namespace digital notebook
   Fileview::line* Fileview::addLine(Fileview::line* row) {
     assert(row != NULL);
     line* ll = newLine();
+    if (!ll) {
+      mError = ENOMEM;
+      return NULL;
+    }
     ll->next = row->next;
     ll->prev = row;
     if (row->next) row->next->prev = ll;
@@ -244,6 +284,10 @@ namespace dnb { // namespace digital notebook
     
   Fileview::line* Fileview::newLine() {
     line* line = new Fileview::line();
+    if (!line) {
+      mError = ENOMEM;
+      return NULL;
+    }
     line->buf = new char[LINEINC];
     line->maxlen = LINEINC;
     line->len = 1;
@@ -252,70 +296,28 @@ namespace dnb { // namespace digital notebook
     return line;
   }
 
-  void fvTests() {
+  void Fileview::render(Adafruit_SSD1306& display, int width, int height) {
+    display.clearDisplay();
+    display.setTextSize(1);               // Normal 1:1 pixel scale
+    display.setTextColor(SSD1306_WHITE);  // Draw white text
+    display.setCursor(0,0);
+
+    int i, j;
+    Fileview::line* row = NULL;
+    Fileview::line* startRow = getStartRow(height, width);
+    for (row = startRow, i = 0; row; row = row->next, i++) {
+      for (j = 0; j < row->len; j++) {
+        display.drawChar(i, j, (uint8_t) row->buf[j]);
+      }
+    }
+    
     int r, c;
-    dnb::Fileview fv;
-    fv.processChar('a', 0); 
-    fv.getCursorPos(r, c);
-    assert(r == 0 && c == 1);
-    assert(strncmp(fv.mFirst->buf, "a\n", 2) == 0);
-    assert(fv.mFirst->len == 2);
-    assert(fv.mNLines == 1);
-
-    fv.processChar('b', 0);
-    fv.getCursorPos(r, c);
-    assert(r == 0 && c == 2);
-    assert(strncmp(fv.mFirst->buf, "ab\n", 3) == 0);
-    assert(fv.mFirst->len == 3);
-    assert(fv.mNLines == 1);
-
-    fv.processChar(13, 13);
-    fv.getCursorPos(r, c);
-    assert(r == 1 && c == 0);
-    assert(strncmp(fv.mFirst->next->buf, "\n", 1) == 0);
-    assert(fv.mFirst->next->len == 1);
-    assert(fv.mNLines == 2);
-
-    fv.processChar(13, 13);
-    fv.processChar('x', 0);
-    fv.processChar('y', 0);
-    fv.processChar(13, 13);
-    fv.processChar('1', 0);
-    fv.processChar('2', 0);
-    fv.getCursorPos(r, c);
-    assert(r == 3 && c == 2);
-
-    fv.processChar(0, 0x50);
-    fv.getCursorPos(r, c);
-    assert(r == 3 && c == 1);
-
-    fv.processChar(0, 0x4F);
-    fv.getCursorPos(r, c);
-    assert(r == 3 && c == 2);
-
-    fv.processChar(0, 0x52);
-    fv.getCursorPos(r, c);
-    assert(r == 2 && c == 2);
-
-    fv.processChar(0, 0x51);
-    fv.getCursorPos(r, c);
-    assert(r == 3 && c == 2);
-
-    fv.processChar(0, 0x50); // move left
-    fv.processChar(8, 8);
-    fv.getCursorPos(r, c);
-    assert(r == 3 && c == 0);
-    assert(strncmp(fv.mCursorRow->buf, "2\n", 2) == 0);
-    assert(fv.mCursorRow->len == 2);
-    assert(fv.mNLines == 4);
-
-    fv.processChar(8, 8); // go to previous line
-    fv.getCursorPos(r, c);
-    assert(r == 2 && c == 2);
-    assert(strncmp(fv.mCursorRow->buf, "xy\n", 2) == 0);
-    assert(fv.mCursorRow->len == 3);
-    assert(fv.mNLines == 3);
+    getCursorPos(r, c);
+    display.setCursor(r, c);
+    display.display();
   }
+
+
 
 }; // end namespace dnb
 #endif
