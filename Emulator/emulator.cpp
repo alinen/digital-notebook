@@ -49,7 +49,6 @@ const int COL_NUM = 21;
 const int ROW_NUM = 8;
 
 bool showmenu = 0;
-int menuSelected = 0;
 std::string DIARY_FILE_NAME;
 
 long lastKeyPress = millis();
