@@ -50,13 +50,16 @@ void printToScreen(const char *s) {
 
 void newFile() {
   char line[32];
-  File settings = SD.open(NBDIR ".nbsettings", FILE_WRITE);
-  settings.seek(0);
+  File settings = SD.open(NBDIR ".nbsettings", FILE_READ);
   settings.read((uint8_t*) line, 32);
   int num = atoi(line) + 1;
   snprintf(line, 32, "%d", num);
+  settings.close();
+
+  settings = SD.open(NBDIR ".nbsettings", FILE_WRITE);
   settings.seek(0);
   settings.write((const uint8_t*) line, strlen(line));
+  settings.close();
 
   char filename[256];
   snprintf(filename, 256, NBDIR "%d.txt", num);
@@ -138,7 +141,7 @@ void setup() {
   usbHost.setHIDLocal(HID_LOCAL_US);
   delay(200);
   printToScreen(("Digital Notebook\n\nSaving to " + 
-    DIARY_FILE_NAME.substring(18) + "\n\n" + ":)").c_str());
+    DIARY_FILE_NAME.substring(strlen(NBDIR)) + "\n\n" + ":)").c_str());
 }
 
 void loop() {
