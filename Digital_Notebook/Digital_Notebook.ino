@@ -86,7 +86,7 @@ void initializeNotebookDir() {
 }
 
 class MyEspUsbHost : public EspUsbHost {
-  void onKeyboardKey(uint8_t ascii, uint8_t keycode, uint8_t modifier) {
+  void onKeyDown(char ascii, uint8_t keycode, uint8_t modifier) {
     if (ascii == 27) { // escape
       showmenu = !showmenu;
     }
@@ -123,7 +123,7 @@ void setup() {
     return;
   }
 
-  //printToScreen("setting up sd card");
+  printToScreen("setting up sd card");
 
   delay(200);
 
@@ -137,10 +137,10 @@ void setup() {
   initializeNotebookDir();
   newFile();
 
-  usb.setup();
+  usbHost.setup();
   delay(200);
-  //printToScreen(("Digital Notebook\n\nSaving to " + 
-  //  DIARY_FILE_NAME.substring(strlen(NBDIR)) + "\n\n" + ":)").c_str());
+  printToScreen(("Digital Notebook\n\nSaving to " + 
+    DIARY_FILE_NAME.substring(strlen(NBDIR)) + "\n\n" + ":)").c_str());
 }
 
 void loop() {
