@@ -27,8 +27,12 @@
 #include "EspUsbHost.h"
 
 class MyEspUsbHost : public EspUsbHost {
-  void onKeyboardKey(uint8_t ascii, uint8_t keycode, uint8_t modifier) {
-    Serial.printf("key press: %c (%d)\n", ascii, keycode);
+  void onKeyUp(char ascii, uint8_t keycode, uint8_t modifier) {
+    Serial.printf("key UP: %c (%d)\n", ascii, keycode);
+  };
+
+  void onKeyDown(char ascii, uint8_t keycode, uint8_t modifier) {
+    Serial.printf("key DOWN: %c (%d)\n", ascii, keycode);
   };
 };
 

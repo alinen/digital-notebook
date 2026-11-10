@@ -91,6 +91,7 @@ static void onMouseReport(int16_t x, int16_t y, uint8_t buttons, int8_t wheel, v
 }
 
 static void onKeyboardReport(uint8_t modifiers, const uint8_t keys[6], void *) {
+  // f g 
   bool any = modifiers != 0;
   for (int i = 0; i < 6 && !any; i++) {
     any = (keys[i] != 0);
