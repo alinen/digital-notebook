@@ -123,7 +123,7 @@ void setup() {
     return;
   }
 
-  printToScreen("setting up sd card");
+  //printToScreen("setting up sd card");
 
   delay(200);
 
@@ -137,15 +137,14 @@ void setup() {
   initializeNotebookDir();
   newFile();
 
-  usbHost.begin();
-  usbHost.setHIDLocal(HID_LOCAL_US);
+  usb.setup();
   delay(200);
-  printToScreen(("Digital Notebook\n\nSaving to " + 
-    DIARY_FILE_NAME.substring(strlen(NBDIR)) + "\n\n" + ":)").c_str());
+  //printToScreen(("Digital Notebook\n\nSaving to " + 
+  //  DIARY_FILE_NAME.substring(strlen(NBDIR)) + "\n\n" + ":)").c_str());
 }
 
 void loop() {
-  usbHost.task();
+  usbHost.tick();
   if (((millis()-lastKeyPress) > 3000) && (keyPressCount != lastKeyPressCount)){
     saveFile();
     lastKeyPressCount = keyPressCount;
